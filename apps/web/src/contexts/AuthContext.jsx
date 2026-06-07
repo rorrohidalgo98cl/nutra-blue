@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseAuthAvailable } from '@/lib/dataClient';
+import { supabase } from '@/lib/dataClient';
 import { getAccessToken } from '@/lib/authClient';
 
 export const AuthContext = createContext();
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         isAdmin,
         loading,
-        authAvailable: isSupabaseAuthAvailable(),
+        authAvailable: !!supabase,
         login,
         logout,
         register,
