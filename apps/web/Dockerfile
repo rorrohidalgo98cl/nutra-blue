@@ -22,7 +22,7 @@ RUN npm run build --prefix apps/web
 
 FROM nginx:alpine
 
-COPY --from=builder /monorepo/dist/apps/web /usr/share/nginx/html
+COPY --from=builder /monorepo/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
