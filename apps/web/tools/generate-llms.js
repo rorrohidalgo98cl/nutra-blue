@@ -2,6 +2,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const CLEAN_CONTENT_REGEX = {
 	comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
@@ -82,7 +83,18 @@ function extractRoutes(appJsxPath) {
 }
 
 function findReactFiles(dir) {
-	return fs.readdirSync(dir).map(item => path.join(dir, item));
+	let results = [];
+	const list = fs.readdirSync(dir);
+	list.forEach(file => {
+		const filePath = path.join(dir, file);
+		const stat = fs.statSync(filePath);
+		if (stat && stat.isDirectory()) {
+			results = results.concat(findReactFiles(filePath));
+		} else if (file.endsWith('.jsx') || file.endsWith('.js') || file.endsWith('.tsx') || file.endsWith('.ts')) {
+			results.push(filePath);
+		}
+	});
+	return results;
 }
 
 function extractHelmetData(content, filePath, routes) {
@@ -175,7 +187,7 @@ function main() {
 	fs.writeFileSync(outputPath, llmsTxtContent, 'utf8');
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (isMainModule) {
 	main();

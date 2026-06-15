@@ -1,0 +1,11 @@
+## Pages
+- [- Nutra Blue`}](/productdetail): No description available
+- [Carrito - Nutra Blue](/cart): Tu carrito de compras en Nutra Blue
+- [Catálogo - Nutra Blue](/shop): Explora nuestra selección de suplementos funcionales premium para salud cognitiva, gestión del estrés y longevidad.
+- [Confirmación de Orden - Nutra Blue](/orderconfirmation): Tu orden ha sido confirmada exitosamente
+- [Iniciar Sesión - Nutra Blue](/login): No description available
+- [Mi Cuenta - Nutra Blue](/account): No description available
+- [Nuestro Impacto - Nutra Blue](/impact): Descubre el impacto y la propuesta de valor de Nutra Blue. Impulsamos la longevidad celular, la claridad mental y la salud sustentable en Chile.
+- [Política de Privacidad - Nutra Blue](/privacypolicy): Política de privacidad de Nutra Blue. Conoce cómo protegemos y gestionamos tus datos personales en conformidad con las leyes chilenas.
+- [Registro - Nutra Blue](/register): No description available
+- [Términos de Servicio - Nutra Blue](/termsofservice): Términos y condiciones de uso de Nutra Blue. Conoce los términos de compra, envíos, políticas de devolución y garantías en Chile.
