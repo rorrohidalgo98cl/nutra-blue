@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Route, Routes, BrowserRouter as Router, Navigate } from 'react-router-dom';
 import { CartProvider } from '@/contexts/CartContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { Toaster } from '@/components/ui/sonner';
 import ScrollToTop from '@/components/ScrollToTop';
-import AdminRoute from '@/components/AdminRoute';
 
 import HomePage from '@/pages/HomePage';
 import ShopPage from '@/pages/ShopPage';
@@ -18,9 +17,18 @@ import ImpactPage from '@/pages/ImpactPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import AccountPage from '@/pages/AccountPage';
-import AdminLayout from '@/pages/admin/AdminLayout';
-import AdminOrdersPage from '@/pages/admin/AdminOrdersPage';
-import AdminProductsPage from '@/pages/admin/AdminProductsPage';
+
+const RedirectToAdmin = () => {
+  useEffect(() => {
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname === '::1';
+    window.location.href = isLocal ? 'http://localhost:3002' : `https://admin.${window.location.hostname.replace('www.', '')}`;
+  }, []);
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
+      Redireccionando al Panel de Administración...
+    </div>
+  );
+};
 
 function App() {
   return (
@@ -41,18 +49,8 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/account" element={<AccountPage />} />
-            <Route
-              path="/admin"
-              element={
-                <AdminRoute>
-                  <AdminLayout />
-                </AdminRoute>
-              }
-            >
-              <Route index element={<Navigate to="/admin/orders" replace />} />
-              <Route path="orders" element={<AdminOrdersPage />} />
-              <Route path="products" element={<AdminProductsPage />} />
-            </Route>
+            <Route path="/admin" element={<RedirectToAdmin />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
 
           <Toaster />
@@ -63,3 +61,4 @@ function App() {
 }
 
 export default App;
+

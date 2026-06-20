@@ -137,3 +137,96 @@ async def delete_product(product_id: str, _: dict = Depends(verify_admin_user)):
         raise
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to delete product")
+
+
+@router.get("/dashboard/metrics")
+async def get_dashboard_metrics(_: dict = Depends(verify_admin_user)):
+    if supabase_client is None:
+        orders = list(MOCK_ORDERS.values())
+        revenue = sum(o.get("total", 0) for o in orders if o.get("status") in ["paid", "shipped"])
+        pending_orders = sum(1 for o in orders if o.get("status") == "pending")
+        return {
+            "revenue": revenue,
+            "pending_orders": pending_orders,
+            "visits": 1420,
+            "conversion_rate": 2.8
+        }
+    try:
+        res_orders = supabase_client.from_("orders").select("total, status").execute()
+        orders_data = res_orders.data or []
+        revenue = sum(o.get("total", 0) or o.get("total_amount", 0) for o in orders_data if o.get("status") in ["paid", "shipped"])
+        pending_orders = sum(1 for o in orders_data if o.get("status") == "pending")
+        return {
+            "revenue": revenue,
+            "pending_orders": pending_orders,
+            "visits": 1420,
+            "conversion_rate": 2.8
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch dashboard metrics: {str(e)}")
+
+
+@router.get("/orders/recent")
+async def get_recent_orders(limit: int = 10, _: dict = Depends(verify_admin_user)):
+    if supabase_client is None:
+        orders = list(MOCK_ORDERS.values())
+        return sorted(orders, key=lambda o: o.get("created_at", ""), reverse=True)[:limit]
+    try:
+        response = supabase_client.from_("orders").select("*").order("created_at", desc=True).limit(limit).execute()
+        return response.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch recent orders: {str(e)}")
+
+
+@router.get("/inventory/alerts")
+async def get_inventory_alerts(_: dict = Depends(verify_admin_user)):
+    if supabase_client is None:
+        low_stock = [p for p in MOCK_PRODUCTS if p.get("stock", 0) <= 40]
+        # Return mock expiration alerts
+        expiration_alerts = [
+            {"id": "matcha-ritual", "name": "Matcha Ritual", "stock": 35, "alert_type": "vencimiento", "details": "Vence en 15 días"}
+        ]
+        return {
+            "low_stock": low_stock[:5],
+            "expiration": expiration_alerts
+        }
+    try:
+        res_low = supabase_client.from_("products").select("*").lte("stock", 10).execute()
+        # Handle expiration alerts gracefully (return empty list if column doesn't exist yet)
+        try:
+            res_exp = supabase_client.from_("products").select("*").execute()
+            expiration = []
+            for p in (res_exp.data or []):
+                exp_date = p.get("expiration_date")
+                if exp_date:
+                    expiration.append(p)
+        except Exception:
+            expiration = []
+        return {
+            "low_stock": res_low.data or [],
+            "expiration": expiration
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch inventory alerts: {str(e)}")
+
+
+@router.post("/products/quick-add", response_model=Product)
+async def quick_add_product(product: ProductCreate, _: dict = Depends(verify_admin_user)):
+    if supabase_client is None:
+        new_product = {
+            "id": str(uuid.uuid4()),
+            **product.model_dump(),
+        }
+        MOCK_PRODUCTS.append(new_product)
+        return new_product
+
+    try:
+        response = supabase_client.from_("products").insert(product.model_dump()).execute()
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to create product")
+        return response.data[0]
+    except Exception as e:
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            raise HTTPException(status_code=400, detail="Product name already exists")
+        raise HTTPException(status_code=500, detail="Failed to create product")
+
