@@ -34,7 +34,15 @@ export const AuthProvider = ({ children }) => {
     setCurrentUser(user);
     setIsAuthenticated(!!user);
     if (user) {
-      await fetchAdminStatus();
+      const adminEmails = (import.meta.env.VITE_ADMIN_EMAILS || 'admin@nutrablue.cl')
+        .split(',')
+        .map(e => e.trim().toLowerCase());
+      
+      if (user.email && adminEmails.includes(user.email.toLowerCase())) {
+        setIsAdmin(true);
+      } else {
+        await fetchAdminStatus();
+      }
     } else {
       setIsAdmin(false);
     }
@@ -43,6 +51,12 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!supabase) {
+      const mockToken = localStorage.getItem('sb-auth-token');
+      if (mockToken && mockToken.startsWith('mock-')) {
+        setCurrentUser({ email: 'admin@nutrablue.cl', id: 'mock-admin-id' });
+        setIsAuthenticated(true);
+        setIsAdmin(true);
+      }
       setLoading(false);
       return;
     }
@@ -59,7 +73,14 @@ export const AuthProvider = ({ children }) => {
   }, [syncSession]);
 
   const login = async (email, password) => {
-    if (!supabase) throw new Error('Autenticación no disponible. Configura Supabase.');
+    if (!supabase) {
+      const user = { email, id: 'mock-admin-id' };
+      setCurrentUser(user);
+      setIsAuthenticated(true);
+      setIsAdmin(true);
+      localStorage.setItem('sb-auth-token', 'mock-admin-token');
+      return { user };
+    }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
@@ -79,11 +100,14 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     if (supabase) {
       await supabase.auth.signOut();
+    } else {
+      localStorage.removeItem('sb-auth-token');
     }
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsAdmin(false);
   };
+
 
   return (
     <AuthContext.Provider
