@@ -9,6 +9,7 @@ class ProductBase(BaseModel):
     image_url: Optional[str] = None
     benefits: List[str] = []
     certifications: List[str] = []
+    google_doc_url: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -21,6 +22,7 @@ class ProductUpdate(BaseModel):
     image_url: Optional[str] = None
     benefits: Optional[List[str]] = None
     certifications: Optional[List[str]] = None
+    google_doc_url: Optional[str] = None
 
 class Product(ProductBase):
     id: str
