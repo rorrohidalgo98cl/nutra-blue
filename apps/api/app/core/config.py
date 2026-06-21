@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     supabase_key: str = os.getenv("SUPABASE_KEY", "") # Anon key
     supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "") # Service role key
     
+    # Google Sheets Configuration
+    google_sheet_csv_url: str = os.getenv("GOOGLE_SHEET_CSV_URL", "")
+    
     # AI Integration Configuration
     integrated_ai_api_url: str = os.getenv("INTEGRATED_AI_API_URL", "")
     integrated_ai_api_key: str = os.getenv("INTEGRATED_AI_API_KEY", "")

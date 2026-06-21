@@ -1,12 +1,16 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from app.database.supabase import supabase_client
 from app.core.security import verify_admin_user
 from app.core.mock_store import MOCK_ORDERS
 from app.core.mock_data import MOCK_PRODUCTS
 from app.models.products import Product, ProductCreate, ProductUpdate
 from app.models.orders import OrderUpdateStatus
+from app.core.config import settings
 import uuid
+import requests
+import csv
+import io
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -229,4 +233,169 @@ async def quick_add_product(product: ProductCreate, _: dict = Depends(verify_adm
         if "duplicate" in str(e).lower() or "unique" in str(e).lower():
             raise HTTPException(status_code=400, detail="Product name already exists")
         raise HTTPException(status_code=500, detail="Failed to create product")
+
+
+from pydantic import BaseModel
+
+class SyncSheetsRequest(BaseModel):
+    csv_url: Optional[str] = None
+
+
+@router.post("/products/sync-sheets")
+async def sync_products_from_sheets(
+    request_data: Optional[SyncSheetsRequest] = None,
+    _: dict = Depends(verify_admin_user),
+):
+    """
+    Sincroniza el catálogo de productos desde un Google Sheet publicado en la web como CSV.
+    Si no se envía csv_url, utiliza el configurado en la variable de entorno GOOGLE_SHEET_CSV_URL.
+    """
+    url = (request_data.csv_url if request_data else None) or settings.google_sheet_csv_url
+    if not url:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere un CSV URL en el cuerpo o configurado en la variable GOOGLE_SHEET_CSV_URL"
+        )
+
+    try:
+        # Descargar el CSV
+        res = requests.get(url, timeout=10)
+        res.raise_for_status()
+        csv_text = res.text
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al descargar el CSV: {str(e)}")
+
+    # Parsear y mapear columnas de forma flexible
+    def normalize_key(key: str) -> str:
+        k = key.lower().strip()
+        if k in ("name", "nombre"): return "name"
+        if k in ("price", "precio"): return "price"
+        if k in ("stock", "inventario"): return "stock"
+        if k in ("category", "categoria", "categoría"): return "category"
+        if k in ("image_url", "image", "imagen", "imagen_url", "url imagen", "url_imagen"): return "image_url"
+        if k in ("benefits", "beneficios"): return "benefits"
+        if k in ("certifications", "certificaciones"): return "certifications"
+        if k in ("google_doc_url", "ficha_url", "ficha", "documento", "google doc url"): return "google_doc_url"
+        return k
+
+    report = {"created": 0, "updated": 0, "errors": []}
+
+    try:
+        reader = csv.DictReader(io.StringIO(csv_text))
+        rows = list(reader)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al estructurar el CSV: {str(e)}")
+
+    for index, raw_row in enumerate(rows):
+        # Mapear llaves normalizadas
+        row = {normalize_key(k): v for k, v in raw_row.items() if k}
+        
+        # Validar campos obligatorios básicos
+        name = row.get("name")
+        if not name:
+            report["errors"].append({
+                "row": index + 1,
+                "product": "Desconocido",
+                "error": "El nombre del producto es obligatorio y no puede estar vacío"
+            })
+            continue
+
+        try:
+            # Limpiar precio: quitar $, puntos, espacios y convertir a int
+            raw_price = str(row.get("price") or "").replace("$", "").replace(".", "").replace(",", "").strip()
+            if raw_price and not raw_price.isdigit():
+                raise ValueError("El precio debe ser un número entero válido")
+            price = int(raw_price) if raw_price else 0
+            
+            # Limpiar stock
+            raw_stock = str(row.get("stock") or "").strip()
+            if raw_stock and not raw_stock.isdigit():
+                raise ValueError("El stock debe ser un número entero válido")
+            stock = int(raw_stock) if raw_stock else 0
+
+            # Procesar arreglos separados por punto y coma (o coma si no hay punto y coma)
+            def parse_list(val: Optional[str]) -> List[str]:
+                if not val:
+                    return []
+                delimiter = ";" if ";" in val else ","
+                return [item.strip() for item in val.split(delimiter) if item.strip()]
+
+            benefits = parse_list(row.get("benefits"))
+            certifications = parse_list(row.get("certifications"))
+            
+            category = row.get("category", "Otros").strip()
+            image_url = row.get("image_url", "").strip() or None
+            google_doc_url = row.get("google_doc_url", "").strip() or None
+
+            # Validar con Pydantic
+            product_to_validate = ProductCreate(
+                name=name,
+                price=price,
+                stock=stock,
+                category=category,
+                image_url=image_url,
+                benefits=benefits,
+                certifications=certifications,
+                google_doc_url=google_doc_url
+            )
+
+        except Exception as e:
+            report["errors"].append({
+                "row": index + 1,
+                "product": name,
+                "error": f"Error de validación de datos: {str(e)}"
+            })
+            continue
+
+        # Guardar en base de datos o mock
+        if supabase_client is None:
+            # Modo mock en memoria
+            product_dict = {
+                "id": name.lower().replace(" ", "-"),
+                **product_to_validate.model_dump()
+            }
+            # Buscar si ya existe por nombre
+            found = False
+            for idx, p in enumerate(MOCK_PRODUCTS):
+                if p["name"].lower() == name.lower():
+                    MOCK_PRODUCTS[idx] = product_dict
+                    report["updated"] += 1
+                    found = True
+                    break
+            if not found:
+                MOCK_PRODUCTS.append(product_dict)
+                report["created"] += 1
+        else:
+            # Modo producción/local con Supabase
+            try:
+                # Obtenemos los campos a guardar
+                db_data = product_to_validate.model_dump()
+                # Realizar upsert basándonos en la restricción UNIQUE de 'name'
+                res_upsert = supabase_client.from_("products").upsert(
+                    db_data,
+                    on_conflict="name"
+                ).execute()
+                
+                if res_upsert.data:
+                    # En Supabase no sabemos directamente si fue INSERT o UPDATE a menos que comparemos
+                    # o contemos. Asumimos éxito e incrementamos actualizados por defecto.
+                    report["updated"] += 1
+                else:
+                    report["errors"].append({
+                        "row": index + 1,
+                        "product": name,
+                        "error": "No se retornaron datos tras el guardado"
+                    })
+            except Exception as e:
+                report["errors"].append({
+                    "row": index + 1,
+                    "product": name,
+                    "error": f"Error al guardar en Supabase: {str(e)}"
+                })
+
+    return {
+        "success": len(report["errors"]) < len(rows),
+        "summary": report,
+        "message": f"Sincronización finalizada. Creados/Actualizados con éxito: {report['created'] + report['updated']}. Errores: {len(report['errors'])}"
+    }
 
