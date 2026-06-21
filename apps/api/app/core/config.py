@@ -1,4 +1,5 @@
 import os
+from pydantic import Field
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -9,11 +10,16 @@ class Settings(BaseSettings):
     environment: str = os.getenv("ENVIRONMENT", "development")
     cors_origins: str = os.getenv("CORS_ORIGIN", "http://localhost:3000")
     internal_api_key: str = os.getenv("INTERNAL_API_KEY", "")
-    admin_emails: list[str] = [
-        e.strip().lower()
-        for e in os.getenv("ADMIN_EMAILS", "").split(",")
-        if e.strip()
-    ]
+    
+    admin_emails_raw: str = Field(default="", alias="admin_emails")
+
+    @property
+    def admin_emails(self) -> list[str]:
+        return [
+            e.strip().lower()
+            for e in self.admin_emails_raw.split(",")
+            if e.strip()
+        ]
 
     # Email (Resend)
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")

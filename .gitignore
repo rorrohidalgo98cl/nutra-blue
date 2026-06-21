@@ -43,3 +43,5 @@ apps/web/node_modules/.vite/
 
 # GitHub workflows (ignored due to IDE token scope limits)
 .github/
+
+.vercel
